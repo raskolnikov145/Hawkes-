@@ -1,0 +1,64 @@
+import numpy as np
+import matplotlib.pyplot as plt
+from HawkesPyLib.inference import ExpHawkesProcessInference 
+from SampleGenerater import samples_generate
+from DataProcess2 import fetch_large_active_buy_orders_array
+from datetime import datetime
+
+# --------------------- 步骤1: 准备你的数据 ---------------------
+# 假设你的数据是一个事件时间列表（从小到大排序的浮点数）
+# 示例数据（请替换成你的真实数据！！）
+
+def timestamps_to_seconds_since_open(arr: np.ndarray, open_time: str = '09:30:00') -> np.ndarray:
+    """
+    将时间戳数组（第一列为 'HH:MM:SS' 格式字符串）转换为距离开盘时间（默认09:30:00）的秒数
+    
+    参数:
+    arr: numpy.ndarray，第一列必须是时间字符串，如 '09:30:00'
+    open_time: str，开盘时间，默认为 '09:30:00'（A股早盘开盘时间）
+    
+    返回:
+    np.ndarray (int)，形状 (n,)，每个元素为对应时间距离开盘的秒数
+    """
+    # 提取时间列（第一列）
+    times = arr[:, 0]
+    
+    # 解析开盘时间
+    base_time = datetime.strptime(open_time, '%H  :%M:%S')
+    
+    # 计算每个时间与开盘时间的差值（秒）
+    seconds_list = []
+    for t in times:
+        try:
+            current_time = datetime.strptime(t, '%H:%M:%S')
+            diff_seconds = (current_time - base_time).total_seconds()
+            seconds_list.append(int(diff_seconds))
+        except ValueError:
+            raise ValueError(f"时间格式错误: {t}，请确保为 'HH:MM:SS' 格式")
+    
+    return np.array(seconds_list, dtype=int)
+
+
+samplesymbols=samples_generate()
+eventssampleholder=np.array([],dtype=int)
+print(samplesymbols)
+for i in range(len(samplesymbols)):
+
+    symbol=samplesymbols[i+1]
+    timestamp=fetch_large_active_buy_orders_array(symbol)
+    events=timestamps_to_seconds_since_open(timestamp)
+    eventssampleholder=np.append(eventssampleholder,[events])
+
+parameterholder=[]
+for i in range(len(eventssampleholder)):
+    events=eventssampleholder[i]
+    estimator = ExpHawkesProcessInference()
+    estimator.estimate(events, T)
+    # 获取拟合参数
+    mu = estimator.mu      # 背景强度 λ0
+    eta = estimator.eta  # 激发强度 α
+    beta = (1/estimator.theta)   # 衰减率 β
+    parameter=[mu,eta,beta]
+    parameterholder.append(parameter)
+
+print(parameterholder)
